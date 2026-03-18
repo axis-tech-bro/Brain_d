@@ -107,7 +107,7 @@ The recommended product approach is a **Data-First Few-Shot Generation System**.
   - **Pros**: 1. Extremely high performance and low latency, 2. Strongly typed and memory safe.
   - **Cons**: 1. Steep learning curve, 2. Overkill for an API primarily acting as a proxy to an LLM.
 
-### Data Pipeline
+### Data Pipeline (Mocked in Demo)
 - **Recommended Approach**: Python Pandas + Financial APIs (e.g., Alpha Vantage)
   - **Pros**: 1. Pandas is the industry standard for financial time-series manipulation, 2. Rapid calculation of YTD and quarterly metrics, 3. Easy integration into the FastAPI backend.
   - **Cons**: 1. API rate limits can throttle generation, 2. High memory consumption for massive datasets.
@@ -127,7 +127,7 @@ The recommended product approach is a **Data-First Few-Shot Generation System**.
   - **Deep Dive**: Migrating from an open-source local model to GPT-4o or Claude is the standard enterprise play for alleviating local hardware constraints. Claude 3.5 Sonnet specifically excels at nuanced financial writing and maintaining a rigid, professional tone over an infinitely large context window.
   - **Production Problems & Mitigation**: 1. **Data Leakage Risk**: Sending sensitive internal financial metrics to external third-party endpoints. Solved by using "Zero Data Retention" enterprise agreements or Azure OpenAI. 2. **Prompt Injection**: Analysts could accidentally or maliciously inject instructions to alter the report's facts. Solved by decoupling the metric injection from the stylistic LLM prompt (as designed in our MVP Data Model).
 
-### Infrastructure
+### Infrastructure (Not in Demo)
 - **Recommended Approach**: AWS Lambda / API Gateway
   - **Pros**: 1. True serverless architecture scales to zero, 2. Pay only for compute time used during report generation, 3. Fast deployment for PoCs.
   - **Cons**: 1. Cold start latency, 2. Hard 15-minute execution limit.
