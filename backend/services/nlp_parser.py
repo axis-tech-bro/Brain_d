@@ -22,7 +22,7 @@ def parse_temporal_query(query: str) -> dict:
         if not is_ollama_running():
             raise Exception("Ollama server is not reachable on localhost:11434")
             
-        llm = ChatOllama(model="llama3", temperature=0, format="json")
+        llm = ChatOllama(model="llama3.2:3b", temperature=0, format="json")
         prompt = PromptTemplate.from_template(
             "Extract the target market quarter, year, and any style instructions from the following prompt.\n"
             "Style instructions are things like 'funny', 'bullet points', 'Shakespearean', etc.\n"

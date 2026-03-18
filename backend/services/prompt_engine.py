@@ -1,6 +1,17 @@
 import requests
+import json
+import random
+import os
 from langchain_community.chat_models import ChatOllama
 from langchain.prompts import PromptTemplate
+
+# Load RAG Data
+RAG_FILE_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "historical_reports.json")
+try:
+    with open(RAG_FILE_PATH, "r") as f:
+        HISTORICAL_REPORTS = json.load(f)
+except FileNotFoundError:
+    HISTORICAL_REPORTS = []
 
 def is_ollama_running():
     try:
@@ -12,7 +23,7 @@ def is_ollama_running():
 def generate_report_text(data: dict) -> str:
     """
     Uses LangChain and local Llama 3 via Ollama to synthesize the market report based
-    on the user's style query.
+    on the user's style query, augmented with historical RAG examples.
     """
     style_req = data.get('style_instructions', 'None')
     style_note = ""
@@ -23,32 +34,37 @@ def generate_report_text(data: dict) -> str:
         if not is_ollama_running():
             raise Exception("Ollama server is not reachable on localhost:11434")
 
-        llm = ChatOllama(model="llama3", temperature=0.7)
+        # RAG Step: Pick 3 historical reports to provide stylistic context
+        rag_context = ""
+        if HISTORICAL_REPORTS:
+            samples = random.sample(HISTORICAL_REPORTS, min(3, len(HISTORICAL_REPORTS)))
+            for idx, ex in enumerate(samples):
+                rag_context += f"--- Example ({ex['quarter']} {ex['year']}) ---\n{ex['text']}\n\n"
+
+        llm = ChatOllama(model="llama3.2:3b", temperature=0.2)
         prompt = PromptTemplate.from_template(
-            "You are an expert financial analyst drafting a final Equity Market Report for the organization.\n"
-            "You MUST perfectly mimic the exact structure, headers, and bullet points of the Historical Example below, but replace the data with the new Context Data.\n\n"
-            "--- HISTORICAL EXAMPLE ---\n"
-            "Context: Q1 2024 | MSCI ACWI: 8.1% | S&P 500: 10.2% | Drivers: resilient economic growth, robust AI-driven tech earnings\n\n"
-            "Report:\n"
-            "# Equity Market Report: Q1 2024\n\n"
-            "## Executive Summary\n"
-            "During the first quarter of 2024, global equities delivered strong performance, underscored by resilient economic growth and robust AI-driven tech earnings. In this environment, the MSCI ACWI returned 8.1%, while the S&P 500 led developed markets, achieving a 10.2% return.\n\n"
-            "## Market Drivers\n"
-            "The primary catalysts for the quarter's bullish momentum included:\n"
-            "* **Macroeconomic Resilience**: Resilient economic growth surprised to the upside.\n"
-            "* **Sector Dominance**: Robust AI-driven tech earnings propelled major indices.\n"
-            "--- END HISTORICAL EXAMPLE ---\n\n"
-            "Now it is your turn. Write the new report.\n"
+            "You are an expert financial analyst drafting an Equity Market Report.\n"
+            "Your output must follow the EXACT length, structure, and tone of the Historical Examples below.\n\n"
+            "=== HISTORICAL EXAMPLES ===\n"
+            "{rag_context}"
+            "=== END HISTORICAL EXAMPLES ===\n\n"
+            "INSTRUCTIONS:\n"
+            "1. Write EXACTLY two or three paragraphs, mirroring the flow of the examples.\n"
+            "2. Paragraph 1 MUST discuss the Macro Drivers and state the MSCI ACWI return.\n"
+            "3. Paragraph 2 MUST discuss the S&P 500 return.\n"
+            "4. Do NOT use markdown headers, bolding, or bullet points unless the Custom Style explicitly asks for them.\n"
+            "5. Seamlessly integrate the following new data into the text:\n\n"
             "Context Data:\n"
             "- Quarter: {quarter} {year}\n"
             "- MSCI ACWI Return: {msci_acwi_return}\n"
             "- S&P 500 Return: {sp500_return}\n"
             "- Macro Drivers: {drivers}\n"
             "{style}\n\n"
-            "New Report Draft (Strictly Output Markdown Only):"
+            "Final Report Text:"
         )
         chain = prompt | llm
         response = chain.invoke({
+            "rag_context": rag_context,
             "quarter": data.get('quarter', 'Unknown'),
             "year": data.get('year', 'Unknown'),
             "msci_acwi_return": data.get('msci_acwi_return', 'N/A'),

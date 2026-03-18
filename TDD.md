@@ -17,9 +17,8 @@ The core value proposition is executed across three user phases:
 2. Query the internal financial database or external market API for core metrics specific to the target timeframe: MSCI ACWI return, S&P 500 total return, YTD gains, and record highs.
 3. Query a macroeconomic news index for the top 3 market drivers during the target timeframe (e.g., inflation, central bank policy, geopolitical events).
 4. Construct a strict JSON payload combining the retrieved quantitative data and qualitative drivers.
-5. Inject the JSON payload and 3 historical report examples into an LLM using a Few-Shot Prompting framework.
-6. Execute the LLM generation step with a low temperature setting (e.g., 0.1) to enforce deterministic, structural adherence.
-6. Execute the LLM generation step with a low temperature setting (e.g., 0.1) to enforce deterministic, structural adherence.
+5. Retrieve 3 historical report examples from a local JSON database and inject them alongside the payload into an LLM using a strict Retrieval-Augmented Generation (RAG) framework.
+6. Execute the LLM generation step with a highly deterministic temperature setting (0.2) and explicit formatting guards (e.g., prohibiting unauthorized markdown headers) to enforce exact structural adherence to the historical examples.
 7. Output the generated text to the user interface for final human-in-the-loop validation.
 
 ## Data Model (Exchange Format)
@@ -56,8 +55,8 @@ This data model ensures that the LLM is completely isolated from *retrieving* fa
 
 ## Scope
 ### In Scope
-- Prompt engineering using Few-Shot techniques with the provided historical reports, alongside dynamic style modifiers.
-- Local Retrieval-Augmented Generation (RAG) architecture using open-source models (Llama 3 via Ollama).
+- Prompt engineering using Few-Shot techniques with dynamically retrieved historical reports, alongside custom style modifiers.
+- Local Retrieval-Augmented Generation (RAG) architecture using high-speed open-source models (Llama 3.2 3B via Ollama).
 - A basic API or CLI interface to accept user commands.
 
 ### Out of Scope
@@ -82,7 +81,7 @@ The recommended product approach is a **Data-First Few-Shot Generation System**.
 1. Frontend receives string: “Generate the Equity market report for Q4 2025”.
 2. Backend Regex/NLP extracts `{quarter: "Q4", year: 2025}`.
 3. Data Pipeline triggers API calls to fetch MSCI_ACWI_Return, SP500_Return, and Macro_Drivers for Q4 2025.
-4. Backend compiles a system prompt containing strict formatting rules, 3 historical examples from the provided dataset, and the retrieved data variables.
+4. Backend compiles a system prompt containing strict formatting rules, 3 historical examples retrieved dynamically from the RAG dataset, and the retrieved data variables.
 5. ML service processes the prompt and streams the generated markdown response.
 6. Frontend renders the response for human review.
 
@@ -120,10 +119,10 @@ The recommended product approach is a **Data-First Few-Shot Generation System**.
   - **Cons**: 1. Requires a pre-existing GraphQL server, 2. Adds complexity to the query logic.
 
 ### Machine Learning
-- **Implemented Approach**: Local Open-Source LLM (Llama 3 via Ollama) + LangChain
-  - **Pros**: 1. Zero recurring API costs. 2. Absolute data privacy (financial metrics never leave the local machine). 3. Highly capable of extracting structured parameters (style, quarter, year) from noisy natural language.
-  - **Cons**: 1. Bound by the host machine's RAM and GPU capability. 2. Output generation speed fluctuates based on local compute.
-  - **Production Problems & Mitigation**: In a production environment handling dozens of concurrent analyst requests, a single local Llama 3 instance will bottleneck. To solve this, production deployments must horizontally scale via a cluster of dedicated GPU instances (e.g., AWS EC2 `p4d` instances) fronted by a load balancer, or migrate to a serverless open-source provider like Groq or Together AI.
+- **Implemented Approach**: Local Open-Source LLM (Llama 3.2 3B via Ollama) + LangChain
+  - **Pros**: 1. Zero recurring API costs. 2. Absolute data privacy (financial metrics never leave the local machine). 3. Extremely high generation speeds yielding near-instant real-time text streams.
+  - **Cons**: 1. Highly deterministic prompts with rigid formatting rules (e.g., "no headers") are required because smaller 3B models struggle with complex implicit instructions. 2. Bound by the host machine's RAM capability.
+  - **Production Problems & Mitigation**: In a production environment handling dozens of concurrent analyst requests, a single local Llama 3.2 instance will bottleneck. To solve this, production deployments must horizontally scale via a cluster of dedicated GPU instances (e.g., AWS EC2 instances) fronted by a load balancer, or migrate to a serverless open-source provider like Groq or Together AI.
 - **Alternative 1**: Proprietary Managed APIs (OpenAI GPT-4o / Anthropic Claude 3.5 Sonnet)
   - **Deep Dive**: Migrating from an open-source local model to GPT-4o or Claude is the standard enterprise play for alleviating local hardware constraints. Claude 3.5 Sonnet specifically excels at nuanced financial writing and maintaining a rigid, professional tone over an infinitely large context window.
   - **Production Problems & Mitigation**: 1. **Data Leakage Risk**: Sending sensitive internal financial metrics to external third-party endpoints. Solved by using "Zero Data Retention" enterprise agreements or Azure OpenAI. 2. **Prompt Injection**: Analysts could accidentally or maliciously inject instructions to alter the report's facts. Solved by decoupling the metric injection from the stylistic LLM prompt (as designed in our MVP Data Model).
@@ -140,17 +139,8 @@ The recommended product approach is a **Data-First Few-Shot Generation System**.
   - **Cons**: 1. Strict payload size and timeout limits, 2. Tied to the Vercel ecosystem.
 
 ### Deployment Plan & Infrastructure
-For the prototype MVP, the frontend is a React application communicating via REST to a FastAPI backend entirely on `localhost`. Financial data is mocked using a static JSON dictionary. Llama 3 handles text synthesis via a local Ollama server. 
+For the prototype MVP, the frontend is a React application communicating via REST to a FastAPI backend entirely on `localhost`. Financial data is mocked using a static JSON dictionary. Llama 3.2 3B handles text synthesis via a local Ollama server drawing dynamic styling from a RAG JSON database.
 
 **Why production infrastructure (AWS/Serverless) was not deployed for the Demo MVP**:
-Given the strict 6-hour implementation window, the core engineering focus was dedicated entirely to solving the complex behavioral application logic: successfully decoupling hard metrics from LLM generation to eliminate hallucinations, and enforcing legacy report structures via Few-Shot Prompting. Deploying VPCs, API Gateways, or Vercel containers would have consumed the time block with devops configuration overhead rather than proving the viability of the AI RAG engine. The application is, however, completely Docker-ready and gracefully handles missing connections (failing back to mocked strings if Ollama is unavailable), ensuring rapid transition to cloud infrastructure in phase 2.
+Given the short implementation window, the core engineering focus was dedicated entirely to solving the complex behavioral application logic: successfully decoupling hard metrics from LLM generation to eliminate hallucinations, and enforcing legacy report structures via Few-Shot Prompting. Deploying VPCs, API Gateways, or Vercel containers would have consumed the time block with devops configuration overhead rather than proving the viability of the AI RAG engine. The application is, however, completely Docker-ready and gracefully handles missing connections (failing back to mocked strings if Ollama is unavailable), ensuring rapid transition to cloud infrastructure in phase 2.
 
-## Deviations from Initial Plan
-1. **Frontend Architecture**: Originally scoped as a monolithic `Streamlit` application in the initial requirements for speed. This was immediately pivoted to a decoupled `React (Vite) + FastAPI` stack per user request to ensure a highly customizable, production-grade API architecture from day 1.
-2. **LLM Provider**: Originally prototyped against `OpenAI (GPT-4o)` using `.env` keys. Because the user requested dynamic style querying but lacked immediate API access, the architecture was heavily refactored mid-sprint to support `Local Open-Source LLMs` (Llama 3 via Ollama) utilizing `langchain-community`.
-3. **Infrastructure**: As noted above, cloud deployment (AWS/Streamlit Cloud) was scoped out of the 6-hour MVP entirely to focus on perfecting the deterministic Data Model and LangChain extraction.
-
-### Next Steps
-1. Parse the provided historical reports into a structured text repository to act as the primary Few-Shot template.
-2. Draft the strict system prompt that enforces the exact grammatical structure and metric placement seen in the historical examples.
-3. Build a Python script that successfully fetches financial data for a specific quarter and injects it into the LLM payload.
