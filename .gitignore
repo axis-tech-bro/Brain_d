@@ -1,0 +1,14 @@
+# Environment
+backend/venv/
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
